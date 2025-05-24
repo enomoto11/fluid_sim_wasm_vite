@@ -74,9 +74,14 @@ impl FluidSim {
         }
 
         // 初期速度と平衡分布の設定
+        // より物理的な初期条件: 円柱の上流側でより速い流れ
         for y in 0..NY {
             for x in 0..NX {
-                let initial_ux = 0.05; // 流入速度
+                let initial_ux = if x < self.cylinder_center_x as usize {
+                    0.08 // 上流側でより速い流れ
+                } else {
+                    0.02 // 下流側は遅い流れ
+                };
                 let initial_uy = 0.0;
 
                 // 平衡分布f_eqを計算
@@ -97,23 +102,21 @@ impl FluidSim {
 
     #[wasm_bindgen]
     pub fn step(&mut self) {
-        // 1. ストリーミング (Propagation)
+        // 1. ストリーミング (Propagation) - 水平方向は周期境界
         for y in 0..NY {
             for x in 0..NX {
                 for q in 0..Q {
+                    // 水平方向（左右）は周期境界条件
                     let prev_x = (x as i32 - CX[q] + NX as i32) % NX as i32;
-                    let prev_y = (y as i32 - CY[q] + NY as i32) % NY as i32;
+                    // 鉛直方向（上下）は後で壁境界として別途処理するため、ここでは境界チェック
+                    let prev_y = y as i32 - CY[q];
 
-                    // 周期境界条件 (ただし、今回は流入・流出境界を別に扱う)
-                    // 上下は周期、左右は流入・流出
-                    let current_x = x;
-                    let current_y = y;
+                    // 上下境界をチェック
+                    if prev_y < 0 || prev_y >= NY as i32 {
+                        continue; // 上下境界は後で別途処理
+                    }
 
-                    // Note: LBMのストリーミングは通常、古いf_tempを基に新しいfを計算するが、
-                    // ここではインプレースでf_tempにコピーしてからfに書き戻す方式
-                    // または、2つの配列を交互に利用する (f_even, f_odd)
-                    // 簡単のため、今回はf_tempへのコピーを考えます
-                    self.f_temp[current_y * NX * Q + current_x * Q + q] =
+                    self.f_temp[y * NX * Q + x * Q + q] =
                         self.f[(prev_y as usize) * NX * Q + (prev_x as usize) * Q + q];
                 }
             }
@@ -162,58 +165,49 @@ impl FluidSim {
         }
 
         // 3. 境界条件
-        // 流入境界 (左端): 定常流入
-        let initial_ux = 0.05;
-        let initial_uy = 0.0;
-        for y in 0..NY {
-            let x = 0; // 左端
+
+        // 上下境界: スリップ壁境界条件（摩擦なし）
+        // 上壁 (y = NY-1)
+        for x in 0..NX {
+            let y = NY - 1;
             let idx = y * NX + x;
             if self.obstacle_map[idx] {
                 continue;
             }
 
-            for q in 0..Q {
-                let c_dot_u = (CX[q] as f64) * initial_ux + (CY[q] as f64) * initial_uy;
-                let u_sq = initial_ux.powi(2) + initial_uy.powi(2);
-                let feq = W[q] * (1.0 + 3.0 * c_dot_u + 4.5 * c_dot_u.powi(2) - 1.5 * u_sq);
-                self.f[idx * Q + q] = feq; // 平衡分布に設定
-            }
+            // スリップ境界: y方向速度を0にし、x方向速度は保持
+            self.uy[idx] = 0.0;
+
+            // 上向きの粒子を下向きに反射（bounce-back for y-component）
+            // q=2 (+y) <-> q=4 (-y), q=5 (+x+y) <-> q=8 (+x-y), q=6 (-x+y) <-> q=7 (-x-y)
+            let temp_f2 = self.f[idx * Q + 2];
+            let temp_f5 = self.f[idx * Q + 5];
+            let temp_f6 = self.f[idx * Q + 6];
+
+            self.f[idx * Q + 4] = temp_f2; // +y -> -y
+            self.f[idx * Q + 8] = temp_f5; // +x+y -> +x-y
+            self.f[idx * Q + 7] = temp_f6; // -x+y -> -x-y
         }
 
-        // 流出境界 (右端): Zoutman境界条件 (非平衡分布のコピー)
-        // 通常は平衡分布を設定するか、単純なコピー
-        // ここでは単純なコピーとして実装
-        for y in 0..NY {
-            let x = NX - 1; // 右端
+        // 下壁 (y = 0)
+        for x in 0..NX {
+            let y = 0;
             let idx = y * NX + x;
             if self.obstacle_map[idx] {
                 continue;
             }
-            // 右端の粒子の分布関数を、左から来る粒子（x-1方向）に対しては、
-            // そのまま前のセルの値をコピーする。
-            // また、右に進む粒子は自由に流出する。
-            // 簡略化のため、ここでは左端と同じく流入速度での平衡分布を設定する
-            // 実際はもっと複雑な処理が必要。
-            // 例: 右に進む粒子の分布関数は、その手前のセルからコピー。
-            // 左に戻る粒子の分布関数は、平衡分布から計算
-            for q in 0..Q {
-                if CX[q] == -1 {
-                    // 左方向の速度成分
-                    let prev_x = x - 1;
-                    let prev_idx = y * NX + prev_x;
-                    self.f[idx * Q + q] = self.f[prev_idx * Q + q];
-                } else {
-                    let feq = W[q]
-                        * (1.0
-                            + 3.0
-                                * ((CX[q] as f64) * self.ux[idx] + (CY[q] as f64) * self.uy[idx])
-                            + 4.5
-                                * ((CX[q] as f64) * self.ux[idx] + (CY[q] as f64) * self.uy[idx])
-                                    .powi(2)
-                            - 1.5 * (self.ux[idx].powi(2) + self.uy[idx].powi(2)));
-                    self.f[idx * Q + q] = feq;
-                }
-            }
+
+            // スリップ境界: y方向速度を0にし、x方向速度は保持
+            self.uy[idx] = 0.0;
+
+            // 下向きの粒子を上向きに反射
+            let temp_f4 = self.f[idx * Q + 4];
+            let temp_f7 = self.f[idx * Q + 7];
+            let temp_f8 = self.f[idx * Q + 8];
+
+            self.f[idx * Q + 2] = temp_f4; // -y -> +y
+            self.f[idx * Q + 5] = temp_f8; // +x-y -> +x+y
+            self.f[idx * Q + 6] = temp_f7; // -x-y -> -x+y
         }
 
         // 障害物境界 (Bounce-back)
