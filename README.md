@@ -2,7 +2,8 @@
 
 Rust + WebAssembly + Vite で動く、円柱まわり流れの流体シミュレーション
 
-![screenshot](https://user-images.githubusercontent.com/102714865/235325123-0e7e6e7e-6b7e-4b7e-8e2e-2e7e6e7e6e7e.gif)
+<img width="789" alt="image" src="https://github.com/user-attachments/assets/38ac2b7e-0839-418a-903e-7888bbebeda8" />
+
 
 ---
 
