@@ -4,8 +4,27 @@
     <meta charset="utf-8">
     <title>Rust Wasm Fluid Simulation</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #333; }
-        canvas { display: block; background-color: #eee; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #f5f5f5;
+        }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-width: 100vw;
+        }
+        #fluidCanvas {
+            display: block;
+            background: #fff;
+            box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+            border-radius: 12px;
+        }
     </style>
 </head>
 <body>
@@ -52,7 +71,7 @@
                             // 速度が速いほど明るい色 (青から赤など、好みに応じて)
                             // ここでは単純に速度の大きさに応じてグレーの濃淡で表現
                             const color = Math.min(255, Math.floor(vel * 5000)); // スケール調整
-                            ctx.fillStyle = `rgb(${color}, ${color}, ${255 - color})`; // 青みがかった色
+                            ctx.fillStyle = `rgb(${255}, ${255 - color}, 0)`; // 黄色〜青のグラデーション
                         }
                         ctx.fillRect(x * scale, y * scale, scale, scale);
                     }
