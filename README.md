@@ -50,12 +50,6 @@ fluid_sim_wasm_vite/
 
 ---
 
-## ✨ スクリーンショット
-
-> ![demo](https://user-images.githubusercontent.com/102714865/235325123-0e7e6e7e-6b7e-4b7e-8e2e-2e7e6e7e6e7e.gif)
-
----
-
 ## 📝 ライセンス
 
 MIT
