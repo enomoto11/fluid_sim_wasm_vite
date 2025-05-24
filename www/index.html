@@ -55,6 +55,15 @@
             const sim = new FluidSim(cylinderRadius, cylinderCenterX, cylinderCenterY);
             const obstacleMap = sim.get_obstacle_map();
 
+            function jetColorMap(value) {
+                // value: 0.0 (青) ～ 1.0 (赤)
+                const fourValue = 4 * value;
+                const r = Math.min(255, Math.max(0, Math.floor(255 * (fourValue - 1.5))));
+                const g = Math.min(255, Math.max(0, Math.floor(255 * (2 - Math.abs(fourValue - 2)))));
+                const b = Math.min(255, Math.max(0, Math.floor(255 * (1.5 - fourValue))));
+                return `rgb(${r},${g},${b})`;
+            }
+
             const render = () => {
                 sim.step(); // シミュレーションを1ステップ進める
                 const velocityMagnitudes = sim.get_velocity_magnitudes();
@@ -66,12 +75,10 @@
                         if (obstacleMap[index]) {
                             ctx.fillStyle = 'rgb(50, 50, 50)'; // 障害物は黒
                         } else {
-                            // 速度の大きさに応じて色を決定
                             const vel = velocityMagnitudes[index];
-                            // 速度が速いほど明るい色 (青から赤など、好みに応じて)
-                            // ここでは単純に速度の大きさに応じてグレーの濃淡で表現
-                            const color = Math.min(255, Math.floor(vel * 5000)); // スケール調整
-                            ctx.fillStyle = `rgb(${255}, ${255 - color}, 0)`; // 黄色〜青のグラデーション
+                            const maxVel = 0.08; // 最大速度（調整可）
+                            const normVel = Math.min(1.0, vel / maxVel);
+                            ctx.fillStyle = jetColorMap(normVel);
                         }
                         ctx.fillRect(x * scale, y * scale, scale, scale);
                     }
