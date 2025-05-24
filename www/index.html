@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Rust Wasm Fluid Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #333; }
+        canvas { display: block; background-color: #eee; }
+    </style>
+</head>
+<body>
+    <canvas id="fluidCanvas"></canvas>
+    <script type="module">
+        //
+        // ViteでWASMを読み込むには、pkgディレクトリをwww配下に移動してください。
+        // 例: www/pkg/fluid_sim_wasm.js, www/pkg/fluid_sim_wasm_bg.wasm
+        //
+        import init, { FluidSim } from '/pkg/fluid_sim_wasm.js';
+
+        async function run() {
+            await init();
+
+            const canvas = document.getElementById('fluidCanvas');
+            const ctx = canvas.getContext('2d');
+
+            const scale = 4; // グリッド1マスあたりのピクセル数
+            const nx = 200;
+            const ny = 100;
+            const cylinderRadius = 20.0;
+            const cylinderCenterX = 50.0;
+            const cylinderCenterY = ny / 2.0;
+
+            canvas.width = nx * scale;
+            canvas.height = ny * scale;
+
+            const sim = new FluidSim(cylinderRadius, cylinderCenterX, cylinderCenterY);
+            const obstacleMap = sim.get_obstacle_map();
+
+            const render = () => {
+                sim.step(); // シミュレーションを1ステップ進める
+                const velocityMagnitudes = sim.get_velocity_magnitudes();
+
+                // 描画
+                for (let y = 0; y < ny; y++) {
+                    for (let x = 0; x < nx; x++) {
+                        const index = y * nx + x;
+                        if (obstacleMap[index]) {
+                            ctx.fillStyle = 'rgb(50, 50, 50)'; // 障害物は黒
+                        } else {
+                            // 速度の大きさに応じて色を決定
+                            const vel = velocityMagnitudes[index];
+                            // 速度が速いほど明るい色 (青から赤など、好みに応じて)
+                            // ここでは単純に速度の大きさに応じてグレーの濃淡で表現
+                            const color = Math.min(255, Math.floor(vel * 5000)); // スケール調整
+                            ctx.fillStyle = `rgb(${color}, ${color}, ${255 - color})`; // 青みがかった色
+                        }
+                        ctx.fillRect(x * scale, y * scale, scale, scale);
+                    }
+                }
+
+                requestAnimationFrame(render);
+            };
+
+            render(); // アニメーション開始
+        }
+
+        run();
+    </script>
+</body>
+</html>
